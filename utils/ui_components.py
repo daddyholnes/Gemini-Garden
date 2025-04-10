@@ -4,6 +4,38 @@ UI components for the AI Chat Studio
 import streamlit as st
 from typing import Dict, Any, List, Optional, Callable
 from utils.voice_commands import get_voice_help_text
+from datetime import datetime
+import os
+from flask import Flask, request, Response
+
+UPLOAD_FOLDER = './uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file uploads and save them to the 'uploads' folder."""
+    if 'file' not in request.files:
+        return "No file part in the request", 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return "No selected file", 400
+
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+    return "File uploaded successfully!"
+
+@app.route('/stream', methods=['GET'])
+def stream_response():
+    """Stream chat responses in chunks with typing indicators."""
+    def generate_response():
+        yield "Typing...\n"
+        yield "Hello! How can I help you?\n"
+        yield "Let me know if you need anything else.\n"
+    
+    return Response(generate_response(), content_type='text/plain')
 
 def render_voice_command_ui(
     voice_active: bool,
@@ -136,3 +168,9 @@ def create_tooltip_html(message: str, position: str = "top") -> str:
         <span class="tooltiptext tooltip-{position}">{message}</span>
     </div>
     """
+
+def save_chat(user, message):
+    """Save chat messages to a local file with timestamps."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open("chat_history.txt", "a") as f:
+        f.write(f"[{timestamp}] {user}: {message}\n")

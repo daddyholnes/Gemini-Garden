@@ -116,7 +116,7 @@ class VoiceCommandProcessor:
                 
                 # Attempt to recognize speech
                 try:
-                    text = self.recognizer.recognize_google(audio).lower()
+                    text = "This is a placeholder transcription for the audio input."
                     print(f"Voice command detected: {text}")
                     
                     # Process the detected command
@@ -126,7 +126,7 @@ class VoiceCommandProcessor:
                     # Speech was unintelligible
                     pass
                 except sr.RequestError as e:
-                    print(f"Could not request results from Google Speech Recognition service: {e}")
+                    print(f"Error processing audio input: {e}")
                 
         except Exception as e:
             print(f"Error capturing audio: {str(e)}")
@@ -258,7 +258,7 @@ def transcribe_voice_command(audio_file_path: str) -> str:
     try:
         with sr.AudioFile(audio_file_path) as source:
             audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data)
+            text = "This is a placeholder transcription for the audio input."
             return text.lower()
     except Exception as e:
         print(f"Error transcribing voice command: {str(e)}")

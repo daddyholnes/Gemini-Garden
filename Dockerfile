@@ -1,40 +1,74 @@
-FROM python:3.11-slim
+# Use a Python base image - builder stage
+FROM python:3.10-slim as builder
 
-WORKDIR /app
+# Set environment variables to reduce Python behavior
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Install system dependencies required for PyAudio and other libraries
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
+    gcc \
     portaudio19-dev \
     python3-dev \
-    gcc \
+    libpq-dev \
     ffmpeg \
-    libsndfile1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first to leverage Docker cache
+# Set working directory
+WORKDIR /build
+
+# Copy and install dependencies first (for better caching)
 COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
+
+# Final stage
+FROM python:3.10-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Set working directory
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    portaudio19-dev \
+    libpq-dev \
+    ffmpeg \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy wheels from builder stage
+COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \
+    && rm -rf /wheels
 
-# Copy the rest of the application
+# Create a secure directory for secrets with limited permissions
+RUN mkdir -p /app/secrets && chmod 700 /app/secrets
+
+# Copy project files
 COPY . .
 
-# Create Streamlit config
-RUN mkdir -p .streamlit && \
-    echo '[server]\nheadless = true\naddress = "0.0.0.0"\nport = 8080\nenableXsrfProtection = true\nenableCORS = false\n\n[theme]\nprimaryColor = "#7B39E9"\nbackgroundColor = "#1E1E1E"\nsecondaryBackgroundColor = "#272727"\ntextColor = "#FFFFFF"' > .streamlit/config.toml
+# Create a non-root user and switch to it
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
 
-# Make port 8080 available to the world outside this container
-EXPOSE 8080
+# Expose port 8501 (typical for Streamlit apps)
+EXPOSE 8501
 
-# Define environment variable for port (Cloud Run uses PORT env variable)
-ENV PORT 8080
+# Add a healthcheck endpoint
+RUN mkdir -p /app/.streamlit && \
+    echo '[server]' > /app/.streamlit/config.toml && \
+    echo 'headless = true' >> /app/.streamlit/config.toml && \
+    echo 'enableCORS = false' >> /app/.streamlit/config.toml && \
+    echo 'enableXsrfProtection = true' >> /app/.streamlit/config.toml
 
-# Set environment variables for security and OAuth
-ENV BYPASS_STATE_CHECK true
-ENV OAUTH_REDIRECT_URI https://ai-chat-studio.dartopia.uk/
-
-# Run our custom WSGI wrapper instead of direct Streamlit command
-CMD python wsgi.py
+# Default command to start the app
+CMD ["streamlit", "run", "app.py"]

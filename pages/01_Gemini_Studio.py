@@ -21,12 +21,19 @@ from PIL import Image
 import tempfile
 
 # Import Gemini-specific utilities
-from utils.gemini_api import (
-    initialize_gemini, 
-    get_gemini_models,
-    get_gemini_response,
-    get_gemini_streaming_response
-)
+# from utils.gemini_api import (
+#     initialize_gemini, 
+#     get_gemini_models,
+#     get_gemini_response,
+#     get_gemini_streaming_response
+# )
+
+# Placeholder functions for local AI model interactions
+def initialize_local_ai():
+    return True
+
+def get_local_ai_response(prompt, **kwargs):
+    return "This is a placeholder response from the local AI model."
 
 # Import database utilities for conversation storage
 from utils.database import (
@@ -37,7 +44,7 @@ from utils.database import (
 )
 
 # Auth utilities
-from utils.google_auth import check_login, get_current_user
+from utils.auth import check_login, get_current_user
 
 # Audio utilities 
 from utils.webrtc_audio import audio_recorder_ui
@@ -85,7 +92,7 @@ if "gemini_message_cooldown" not in st.session_state:
 init_db()
 
 # Initialize Gemini API
-gemini_initialized = initialize_gemini()
+ai_initialized = initialize_local_ai()
 
 def encode_image(uploaded_file):
     """Encode an uploaded file to base64 string"""
@@ -141,36 +148,19 @@ def main():
     # Display header
     st.markdown(f"""
     <div style="text-align: center; padding: 20px 0;">
-        <h1 style="font-size: 2.2rem; margin-bottom: 5px;">Gemini Studio</h1>
-        <p style="color: #888; font-size: 1.1rem;">Advanced multimodal interactions with Google's Gemini models</p>
+        <h1 style="font-size: 2.2rem; margin-bottom: 5px;">AI Studio</h1>
+        <p style="color: #888; font-size: 1.1rem;">Advanced multimodal interactions with local AI models</p>
         <div style="max-width: 600px; margin: 10px auto; padding: 8px; background-color: #0f0f0f; border-radius: 8px; border: 1px solid #333;">
             <p style="margin: 0; color: #4285f4;">
-                <strong>Model:</strong> <span id="current-model">{st.session_state.gemini_current_model}</span>
+                <strong>Model:</strong> <span id="current-model">Local-AI-Model</span>
             </p>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     # Check if Gemini API is initialized
-    if not gemini_initialized:
-        st.error("Gemini API not initialized. Please check your API key.")
-        
-        # Add API key input option
-        with st.expander("Set Gemini API Key"):
-            api_key = st.text_input("Enter your Gemini API Key", type="password")
-            if st.button("Save API Key"):
-                if api_key:
-                    # In a real implementation, this would securely store the API key
-                    # For demonstration, we'll just set it in the environment
-                    os.environ["GEMINI_API_KEY"] = api_key
-                    st.success("API Key saved! Please refresh the page.")
-                    time.sleep(2)
-                    st.experimental_rerun()
-                else:
-                    st.warning("Please enter a valid API key")
-        
-        st.warning("You need to set up the Gemini API key to use this feature.")
-        st.info("You can get a Gemini API key from https://ai.google.dev/")
+    if not ai_initialized:
+        st.error("AI model not initialized. Please check your configuration.")
         return
     
     # Create a two-column layout: Chat area and sidebar
@@ -495,7 +485,7 @@ def main():
             clear_multimodal_inputs()
             
             # Display "AI is thinking" message
-            with st.spinner(f"Gemini is thinking... using {st.session_state.gemini_current_model}"):
+            with st.spinner(f"AI is thinking... using {st.session_state.gemini_current_model}"):
                 try:
                     # Extract multimodal content
                     image_data = None
@@ -518,13 +508,12 @@ def main():
                         full_response = ""
                         
                         # Get streaming response
-                        for chunk in get_gemini_streaming_response(
+                        for chunk in get_local_ai_response(
                             prompt=user_text,
                             conversation_history=st.session_state.gemini_messages,
                             image_data=image_data,
                             audio_data=audio_data,
-                            temperature=st.session_state.gemini_temperature,
-                            model_name=st.session_state.gemini_current_model
+                            temperature=st.session_state.gemini_temperature
                         ):
                             # Update response with new chunk
                             full_response += chunk
@@ -542,13 +531,12 @@ def main():
                         response_placeholder.empty()
                     else:
                         # Get complete response (non-streaming)
-                        ai_response = get_gemini_response(
+                        ai_response = get_local_ai_response(
                             prompt=user_text,
                             conversation_history=st.session_state.gemini_messages,
                             image_data=image_data,
                             audio_data=audio_data,
-                            temperature=st.session_state.gemini_temperature,
-                            model_name=st.session_state.gemini_current_model
+                            temperature=st.session_state.gemini_temperature
                         )
                         
                         # Add AI response to messages

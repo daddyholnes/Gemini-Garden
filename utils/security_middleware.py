@@ -18,7 +18,8 @@ def add_security_headers(response):
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
         "font-src 'self' data:; "
-        "connect-src 'self' https://*.googleapis.com https://*.gstatic.com https://api.openai.com https://api.anthropic.com https://api.perplexity.ai https://*.generativelanguage.googleapis.com wss:"
+        # Remove Google-related CSP rules
+        "connect-src 'self' https://api.openai.com https://api.anthropic.com https://api.perplexity.ai wss:"
     )
     
     # X-Content-Type-Options to prevent MIME type sniffing

@@ -26,7 +26,7 @@ import uuid
 
 # Configure RTC for STUN servers
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {"iceServers": [{"urls": ["stun:stun.example.com:3478"]}]}
 )
 
 class AudioProcessor(AudioProcessorBase):

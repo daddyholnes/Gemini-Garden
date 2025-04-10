@@ -32,8 +32,8 @@ The fastest way to get AI Chat Studio running is through Replit:
 - Audio capabilities require:
   - Windows: No additional steps
   - macOS: PortAudio (`brew install portaudio`)
-  - Linux: Python development files and PortAudio (`sudo apt-get install python3-dev portaudio19-dev`)
-
+  - Linux: Python development files and PortAudio (`sudo apt-get `)
+install python3-dev portaudio19-dev
 ### Step 1: Clone the Repository
 
 ```bash
