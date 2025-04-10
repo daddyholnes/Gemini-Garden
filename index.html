@@ -1,0 +1,52 @@
+cd C:\Gemini-Garden && echo '<!DOCTYPE html>
+<html>
+<head>
+    <!-- Usercentrics CMP with Consent Mode V2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag("consent", "default", {
+            "ad_storage": "denied",
+            "analytics_storage": "denied",
+            "ad_user_data": "denied",
+            "ad_personalization": "denied",
+            "wait_for_update": 500
+        });
+    </script>
+
+    <!-- Usercentrics CMP -->
+    <script src="https://web.cmp.usercentrics.eu/modules/autoblocker.js"></script>
+    <script id="usercentrics-cmp" src="https://web.cmp.usercentrics.eu/ui/loader.js" data-settings-id="loE8TyZJ1fNbXI" data-consent-mode-v2="true" async></script>
+    
+    <title>Gemini-Garden</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interact with AI models using text, code, images, audio, or upload files">
+    
+    <!-- Add a link to the privacy policy -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-12 text-center">
+                <h1>Welcome to Gemini-Garden</h1>
+                <p>An advanced AI Chat Studio for interacting with multiple AI models</p>
+                <a href="https://ai-chat-studio.dartopia.uk/" class="btn btn-primary mt-3">Launch AI Chat Studio</a>
+            </div>
+        </div>
+        
+        <footer class="mt-5 pt-3 text-center border-top">
+            <div class="container">
+                <div class="row">
+                    <div class="col-12">
+                        <p>&copy; 2025 Gemini-Garden. All rights reserved.</p>
+                        <a href="privacy-policy.html" class="me-3">Privacy Policy</a>
+                        <a href="terms-of-service.html">Terms of Service</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>' > index.html
