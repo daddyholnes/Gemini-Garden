@@ -9,6 +9,7 @@ import google.generativeai as genai
 from PIL import Image
 from io import BytesIO
 import streamlit as st
+from .database import db, ModelPersonality
 
 # Constants
 DEFAULT_MODEL = "gemini-1.5-pro"
@@ -238,3 +239,55 @@ def get_gemini_streaming_response(
         
     except Exception as e:
         yield f"Error with Gemini streaming: {str(e)}"
+
+def get_model_personality(user_id, model_name, personality_name="default"):
+    """Fetch stored personality settings for a specific model."""
+    personality = ModelPersonality.query.filter_by(
+        user_id=user_id,
+        model_name=model_name,
+        personality_name=personality_name
+    ).first()
+
+    if not personality:
+        # Create default personality settings
+        default_settings = {
+            "temperature": 0.7,
+            "max_tokens": 1024,
+            "system_prompt": "You are a helpful assistant."
+        }
+
+        # Different defaults based on personality type
+        if personality_name == "creative":
+            default_settings["temperature"] = 0.9
+            default_settings["system_prompt"] = "You are a creative and imaginative assistant."
+        elif personality_name == "analytical":
+            default_settings["temperature"] = 0.3
+            default_settings["system_prompt"] = "You are a precise and analytical assistant."
+
+        # Save new personality
+        personality = ModelPersonality(
+            user_id=user_id,
+            model_name=model_name,
+            personality_name=personality_name,
+            **default_settings
+        )
+        db.session.add(personality)
+        db.session.commit()
+
+    return personality
+
+def generate_response(message, user_id, model_name="gemini-pro", personality_name="default"):
+    # Get personality settings
+    personality = get_model_personality(user_id, model_name, personality_name)
+
+    # Configure API call with personality settings
+    if "gemini" in model_name:
+        return call_gemini_api(
+            message=message,
+            temperature=personality.temperature,
+            max_tokens=personality.max_tokens,
+            system_prompt=personality.system_prompt
+        )
+    elif "vertex" in model_name:
+        # Similar implementation for Vertex models
+        pass

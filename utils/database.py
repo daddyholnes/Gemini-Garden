@@ -5,11 +5,46 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 import psycopg2
 import uuid
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(255), nullable=True)  # Added email column
+    is_admin = db.Column(db.Boolean, default=False)
+
+class ModelPersonality(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    model_name = db.Column(db.String(50), nullable=False)
+    personality_name = db.Column(db.String(50), nullable=False)
+    temperature = db.Column(db.Float, default=0.7)
+    max_tokens = db.Column(db.Integer, default=1024)
+    system_prompt = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    last_used = db.Column(db.DateTime)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'model_name', 'personality_name', name='_user_model_personality_uc'),)
 
 # Helper function to get the database URL from environment variables
 def get_db_url() -> Optional[str]:
     """Get the PostgreSQL connection string from environment variables."""
     return os.environ.get("POSTGRESQL_URL") or os.environ.get("DATABASE_URL")
+
+def get_db_connection():
+    """Establish and return a database connection."""
+    db_url = get_db_url()
+    if not db_url:
+        raise ValueError("Database URL is not set in environment variables.")
+
+    try:
+        conn = psycopg2.connect(db_url)
+        return conn
+    except Exception as e:
+        raise ConnectionError(f"Failed to connect to the database: {e}")
 
 def init_db() -> None:
     """
