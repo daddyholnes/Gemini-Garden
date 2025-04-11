@@ -330,3 +330,16 @@ def get_perplexity_response(prompt: str, message_history: List[Dict[str, str]], 
         return f"All Perplexity models failed. Last error: {last_error}"
     except Exception as e:
         return f"General error with Perplexity API: {str(e)}"
+
+GEMINI_MODELS = {
+    "gemini-2.5-pro-preview-03-25": "Advanced reasoning",
+    "gemini-2.0-flash": "Real-time chat",
+    "gemini-2.0-flash-lite": "Cost-effective, high throughput",
+    "gemini-1.5-pro": "General purpose",
+    "gemini-1.5-flash": "Fast and versatile",
+    "gemini-1.5-flash-8b": "High volume, lower intelligence",
+    "gemini-embedding-exp": "Text embeddings",
+    "imagen-3.0-generate-002": "Advanced image generation",
+    "veo-2.0-generate-001": "High-quality video generation",
+    "gemini-2.0-flash-live-001": "Low-latency bidirectional interactions"
+}

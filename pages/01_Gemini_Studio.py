@@ -226,6 +226,20 @@ def main():
             st.sidebar.success("Started new conversation")
             st.rerun()
             
+        # Sidebar for personality selection
+        st.sidebar.title("Personality Selector")
+        st.sidebar.markdown("Select a personality for the AI model:")
+        selected_personality = st.sidebar.selectbox(
+            "Choose a Personality:",
+            ["Default", "Creative & Imaginative", "Analytical & Precise", "Friendly & Supportive", "Custom..."]
+        )
+
+        if selected_personality == "Custom...":
+            custom_instructions = st.sidebar.text_area("Custom Personality Instructions:")
+            if st.sidebar.button("Save Custom Personality"):
+                st.session_state.custom_personality = custom_instructions
+                st.sidebar.success("Custom personality saved!")
+        
     # Main chat area (col1)
     with col1:
         # Custom CSS for chat styling
