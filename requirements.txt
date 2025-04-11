@@ -24,3 +24,4 @@ elevenlabs>=1.56.0
 soundfile>=0.13.1
 av>=14.3.0
 flask
+flask_sqlalchemy # Added this line
