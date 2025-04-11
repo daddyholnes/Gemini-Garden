@@ -2,344 +2,327 @@ import os
 import sys
 import requests
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Generator
+import base64
+from PIL import Image
+import io
 
-# Gemini API 
-def get_gemini_response(prompt: str, message_history: List[Dict[str, str]], image_data=None, audio_data=None, temperature=0.7, model_name="gemini-1.5-pro") -> str:
+# --- Model Definitions ---
+
+SUPPORTED_MODELS = {
+    # Gemini Models (using google.generativeai)
+    "Gemini 1.5 Pro (Google)": {"api": "gemini", "model_name": "gemini-1.5-pro"},
+    "Gemini 1.5 Flash (Google)": {"api": "gemini", "model_name": "gemini-1.5-flash"},
+    # Add other Gemini models from the original GEMINI_MODELS dict as needed
+    # "Gemini 2.5 Pro Preview (Google)": {"api": "gemini", "model_name": "gemini-2.5-pro-preview-03-25"}, # Example if needed
+    "Gemini 2.0 Flash (Google)": {"api": "gemini", "model_name": "gemini-2.0-flash"},
+
+    # Anthropic Models
+    "Claude 3.5 Sonnet (Anthropic)": {"api": "anthropic", "model_name": "claude-3-5-sonnet-20241022"},
+    # Add other Claude models if you have access or they are released
+    # "Claude 3 Opus (Anthropic)": {"api": "anthropic", "model_name": "claude-3-opus-20240229"}, # Example
+
+    # OpenAI Models
+    "GPT-4o (OpenAI)": {"api": "openai", "model_name": "gpt-4o"},
+    "GPT-4 Turbo (OpenAI)": {"api": "openai", "model_name": "gpt-4-turbo"},
+    "GPT-3.5 Turbo (OpenAI)": {"api": "openai", "model_name": "gpt-3.5-turbo"},
+
+    # Perplexity Models
+    "Perplexity Online 70B (Perplexity)": {"api": "perplexity", "model_name": "pplx-70b-online"},
+    "Perplexity Chat 70B (Perplexity)": {"api": "perplexity", "model_name": "pplx-70b-chat"},
+    # Add other Perplexity models if needed
+}
+
+# --- Central API Router --- #
+# Note: This router currently returns the full response. We'll adapt it for streaming.
+def generate_chat_response(
+    selected_model_key: str,
+    prompt: str,
+    message_history: List[Dict[str, str]],
+    image_data: Optional[str] = None,
+    audio_data: Optional[str] = None,
+    temperature: float = 0.7,
+    stream: bool = False # Add stream parameter
+) -> Generator[str, None, None] | str:
     """
-    Get a response from the Gemini AI model.
-    
+    Generates a chat response (optionally streaming) using the specified model.
+
     Args:
-        prompt: The user's input prompt
-        message_history: Previous message history
-        image_data: Optional base64 encoded image data for multimodal prompts
-        audio_data: Optional base64 encoded audio data
-        temperature: Temperature for response generation (creativity)
-        model_name: The specific Gemini model to use (e.g., "gemini-1.5-pro", "gemini-2.5-pro-preview")
-        
+        selected_model_key: The key corresponding to the model in SUPPORTED_MODELS.
+        prompt: The user's input prompt.
+        message_history: Previous message history.
+        image_data: Optional base64 encoded image data.
+        audio_data: Optional base64 encoded audio data.
+        temperature: Temperature for response generation.
+        stream: If True, yields chunks of the response.
+
     Returns:
-        The AI response text
+        A generator yielding response chunks if stream=True, otherwise the full response text.
+        Returns an error message string on failure.
     """
-    # Check if this is a live API model (gemini-2.0-flash-live)
-    if "live" in model_name:
-        # Use the vertex_ai.py implementation
-        from utils.vertex_ai import get_vertex_live_response
-        return get_vertex_live_response(prompt, message_history, model_name=model_name)
+    if selected_model_key not in SUPPORTED_MODELS:
+        error_msg = f"Error: Model '{selected_model_key}' not found in supported models."
+        if stream:
+            yield error_msg
+            return
+        else:
+            return error_msg
+
+    model_info = SUPPORTED_MODELS[selected_model_key]
+    api_type = model_info["api"]
+    model_name = model_info["model_name"]
+
+    try:
+        if api_type == "gemini":
+            # Call the Gemini function, passing the stream flag
+            return get_gemini_response(
+                prompt=prompt,
+                message_history=message_history,
+                image_data=image_data,
+                audio_data=audio_data,
+                temperature=temperature,
+                model_name=model_name,
+                stream=stream # Pass the stream flag
+            )
+        # --- Add streaming logic for other APIs later if needed --- 
+        elif api_type == "anthropic":
+            if stream:
+                 # Placeholder: Anthropic streaming needs separate implementation
+                 yield "Streaming not yet implemented for Anthropic."
+                 return
+            return get_anthropic_response(
+                prompt=prompt,
+                message_history=message_history,
+                model_name=model_name
+            )
+        elif api_type == "openai":
+            if stream:
+                # Placeholder: OpenAI streaming needs separate implementation
+                yield "Streaming not yet implemented for OpenAI."
+                return
+            return get_openai_response(
+                prompt=prompt,
+                message_history=message_history,
+                model_name=model_name
+            )
+        elif api_type == "perplexity":
+            if stream:
+                 # Placeholder: Perplexity streaming needs separate implementation
+                 yield "Streaming not yet implemented for Perplexity."
+                 return
+            return get_perplexity_response(
+                prompt=prompt,
+                message_history=message_history,
+                temperature=temperature,
+                model_name=model_name
+            )
+        else:
+            error_msg = f"Error: API type '{api_type}' is not recognized."
+            if stream:
+                yield error_msg
+                return
+            else:
+                return error_msg
+
+    except Exception as e:
+        error_msg = f"Error generating response with {selected_model_key}: {str(e)}"
+        if stream:
+             yield error_msg
+             return
+        else:
+            return error_msg
+
+# --- Individual API Functions --- #
+
+# Gemini API (Modified to handle streaming)
+def get_gemini_response(
+    prompt: str,
+    message_history: List[Dict[str, str]],
+    image_data: Optional[str] = None,
+    audio_data: Optional[str] = None,
+    temperature: float = 0.7,
+    model_name: str = "gemini-1.5-pro",
+    stream: bool = False # Add stream parameter
+) -> Generator[str, None, None] | str:
+    """
+    Get a response from the Gemini AI model (optionally streaming).
+    Handles text, image, audio.
+    """
     try:
         import google.generativeai as genai
-        import base64
-        from PIL import Image
-        import io
-        
-        # Get API key from environment variables
+
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            return "Error: Gemini API key not found. Please set the GEMINI_API_KEY environment variable."
-        
-        # Configure the Gemini API
+            raise ValueError("Gemini API key not found. Set GEMINI_API_KEY environment variable.")
+
         genai.configure(api_key=api_key)
-        
-        # Convert message history to the format expected by Gemini
+
+        # Format history
         formatted_history = []
         for message in message_history:
-            # Include all messages in the history, don't exclude the last one
-            role = "user" if message["role"] == "user" else "model"
-            formatted_history.append({"role": role, "parts": [message["content"]]})
-        
-        # Use the provided model_name parameter
-        
-        # Create a Gemini model instance with generation config
+             role = "user" if message["role"] == "user" else "model"
+             # Basic text history for now
+             if isinstance(message["content"], str):
+                 formatted_history.append({"role": role, "parts": [message["content"]]})
+             # TODO: Add multimodal history formatting if needed
+
         model = genai.GenerativeModel(
             model_name,
-            generation_config={"temperature": temperature}
+            generation_config=genai.types.GenerationConfig(temperature=temperature)
         )
-        
-        # If there's an image, we need to handle it differently
+
+        # Prepare content parts for the current prompt
+        content_parts = []
         if image_data:
-            # Convert base64 to image
-            image_bytes = base64.b64decode(image_data)
-            image = Image.open(io.BytesIO(image_bytes))
-            
-            # Create content parts with both text and image
-            content = [
-                {"text": prompt},
-                {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
-            ]
-            
-            # Generate response with image input
-            response = model.generate_content(content)
-            return response.text
+            try:
+                image_bytes = base64.b64decode(image_data)
+                img = Image.open(io.BytesIO(image_bytes))
+                content_parts.append(img)
+            except Exception as e:
+                raise ValueError(f"Error processing image data: {str(e)}")
+        if audio_data:
+             try:
+                 audio_bytes = base64.b64decode(audio_data)
+                 # Adjust mime_type based on actual audio format
+                 content_parts.append({"mime_type": "audio/wav", "data": audio_bytes})
+             except Exception as e:
+                 raise ValueError(f"Error processing audio data: {str(e)}")
+
+        content_parts.append(prompt)
+
+        # --- Streaming Logic --- 
+        if stream:
+            # Use generate_content with stream=True
+            # Note: History handling with multimodal + streaming can be complex.
+            # For simplicity, let's pass history for text-only, but not with images/audio yet.
+            if image_data or audio_data:
+                 # Multimodal streaming often doesn't use chat history directly
+                 response_stream = model.generate_content(content_parts, stream=True)
+            else:
+                 # Text-only streaming can use chat history
+                 chat = model.start_chat(history=formatted_history)
+                 response_stream = chat.send_message(prompt, stream=True)
+
+            # Define a generator function to yield text chunks
+            def stream_generator():
+                try:
+                    for chunk in response_stream:
+                        if chunk.text:
+                            yield chunk.text
+                except Exception as e:
+                    yield f"Error during Gemini stream: {str(e)}"
+            return stream_generator()
+
+        # --- Non-Streaming Logic --- 
         else:
-            # Start a chat session with history for text-only conversations
-            chat = model.start_chat(history=formatted_history)
-            
-            # Send the user's message and get a response
-            response = chat.send_message(prompt)
+            if image_data or audio_data:
+                 # Single turn generation for multimodal
+                 response = model.generate_content(content_parts)
+            else:
+                 # Use chat session for text-only
+                 chat = model.start_chat(history=formatted_history)
+                 response = chat.send_message(prompt)
             return response.text
-            
-    except Exception as e:
-        return f"Error with Gemini API: {str(e)}"
 
-# Google Vertex AI (Alternative implementation without requiring vertex-ai packages)
-def get_vertex_ai_response(prompt: str, message_history: List[Dict[str, str]], project_id=None, location=None, model_type=None, model_name=None) -> str:
-    """
-    Get a response similar to Vertex AI using Gemini API with advanced parameters.
-    This is an alternative implementation that doesn't require Vertex AI libraries.
-    
-    Args:
-        prompt: The user's input prompt
-        message_history: Previous message history
-        project_id: Not used in this implementation
-        location: Not used in this implementation
-        model_type: Type of model to use (e.g., "claude", "gpt")
-        model_name: Specific model identifier to use (e.g., "claude-3-5-sonnet-20241022")
-        
-    Returns:
-        The AI response text
-    """
-    try:
-        import google.generativeai as genai
-        
-        # Get API key from environment variables
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            return "Error: Gemini API key not found. Please set the GEMINI_API_KEY environment variable."
-        
-        # Configure the Gemini API
-        genai.configure(api_key=api_key)
-        
-        # Convert message history to the format expected by Gemini
-        formatted_history = []
-        for message in message_history:
-            # Include all messages in the history, don't exclude the last one
-            role = "user" if message["role"] == "user" else "model"
-            formatted_history.append({"role": role, "parts": [message["content"]]})
-        
-        # Create a Gemini model instance with advanced settings
-        # Using more advanced settings to mimic Vertex AI capabilities
-        # Use the specified model_name if provided, otherwise fallback to gemini-1.5-pro
-        model_version = model_name if model_name else "gemini-1.5-pro"
-        model = genai.GenerativeModel(
-            model_version,
-            generation_config={
-                "temperature": 0.4,  # Lower temperature for more factual responses
-                "top_p": 0.8,
-                "top_k": 40,
-                "max_output_tokens": 2048,
-            },
-            safety_settings=[
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                }
-            ]
-        )
-        
-        # Start a chat session with history
-        chat = model.start_chat(history=formatted_history)
-        
-        # Send the user's message and get a response
-        response = chat.send_message(prompt)
-        
-        return response.text
     except Exception as e:
-        return f"Error with Vertex AI alternative: {str(e)}"
+        error_message = f"Error with Gemini API ({model_name}): {str(e)}"
+        # If streaming was requested, yield the error; otherwise, return it.
+        if stream:
+            def error_stream(): yield error_message
+            return error_stream()
+        else:
+            return error_message
 
-# OpenAI API
+
+# OpenAI API (Streaming NOT implemented yet)
 def get_openai_response(prompt: str, message_history: List[Dict[str, str]], model_name="gpt-4o") -> str:
-    """
-    Get a response from the OpenAI GPT model.
-    
-    Args:
-        prompt: The user's input prompt
-        message_history: Previous message history
-        model_name: Specific model identifier to use (e.g., "gpt-4o")
-        
-    Returns:
-        The AI response text
-    """
+    """ Get a response from the OpenAI GPT model. """
     try:
         from openai import OpenAI
-        
-        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024
-        # do not change this unless explicitly requested by the user
-        
-        # Get API key from environment variables
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            return "Error: OpenAI API key not found. Please set the OPENAI_API_KEY environment variable."
-        
-        # Initialize OpenAI client
+            return "Error: OpenAI API key not found. Set OPENAI_API_KEY environment variable."
         client = OpenAI(api_key=api_key)
-        
-        # Format the conversation history for OpenAI
-        formatted_messages = []
-        for message in message_history:
-            formatted_messages.append({
-                "role": message["role"],
-                "content": message["content"]
-            })
-        
-        # Call the OpenAI API with the specified model
+        formatted_messages = [{"role": m["role"], "content": m["content"]} for m in message_history]
+        formatted_messages.append({"role": "user", "content": prompt})
+
         response = client.chat.completions.create(
-            model=model_name,  # Use the provided model_name
+            model=model_name,
             messages=formatted_messages,
-            max_tokens=800
+            max_tokens=1500
         )
-        
         return response.choices[0].message.content
     except Exception as e:
-        return f"Error with OpenAI API: {str(e)}"
+        return f"Error with OpenAI API ({model_name}): {str(e)}"
 
-# Anthropic API
+
+# Anthropic API (Streaming NOT implemented yet)
 def get_anthropic_response(prompt: str, message_history: List[Dict[str, str]], model_name="claude-3-5-sonnet-20241022") -> str:
-    """
-    Get a response from the Anthropic Claude model.
-    
-    Args:
-        prompt: The user's input prompt
-        message_history: Previous message history
-        model_name: Specific model identifier to use (e.g., "claude-3-5-sonnet-20241022")
-        
-    Returns:
-        The AI response text
-    """
+    """ Get a response from the Anthropic Claude model. """
     try:
         from anthropic import Anthropic
-        
-        # the newest Anthropic model is "claude-3-5-sonnet-20241022" which was released October 22, 2024
-        
-        # Get API key from environment variables
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            return "Error: Anthropic API key not found. Please set the ANTHROPIC_API_KEY environment variable."
-        
-        # Initialize Anthropic client
+            return "Error: Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable."
         client = Anthropic(api_key=api_key)
-        
-        # Format message history for Anthropic
         formatted_messages = []
         for message in message_history:
-            role = "user" if message["role"] == "user" else "assistant"
-            formatted_messages.append({
-                "role": role,
-                "content": message["content"]
-            })
-        
-        # Call the Anthropic API with the specified model
+             role = "user" if message["role"] == "user" else "assistant"
+             content = message.get("content", "")
+             if isinstance(content, str):
+                 formatted_messages.append({"role": role, "content": content})
+
+        formatted_messages.append({"role": "user", "content": prompt})
+
         response = client.messages.create(
-            model=model_name,  # Use the provided model_name
+            model=model_name,
             messages=formatted_messages,
-            max_tokens=1000
+            max_tokens=1500
         )
-        
         return response.content[0].text
     except Exception as e:
-        return f"Error with Anthropic API: {str(e)}"
+        return f"Error with Anthropic API ({model_name}): {str(e)}"
 
-# Perplexity API
-def get_perplexity_response(prompt: str, message_history: List[Dict[str, str]], temperature=0.2, model_name=None) -> str:
-    """
-    Get a response from the Perplexity API.
-    
-    Args:
-        prompt: The user's input prompt
-        message_history: Previous message history
-        temperature: Temperature value (0.0 to 1.0) that controls randomness
-        model_name: Specific model identifier to use (e.g., "pplx-70b-online")
-        
-    Returns:
-        The AI response text
-    """
+
+# Perplexity API (Streaming NOT implemented yet)
+def get_perplexity_response(prompt: str, message_history: List[Dict[str, str]], temperature=0.7, model_name="pplx-70b-online") -> str:
+    """ Get a response from the Perplexity API. """
     try:
-        # Get API key from environment variables
         api_key = os.environ.get("PERPLEXITY_API_KEY")
         if not api_key:
-            return "Error: Perplexity API key not found. Please set the PERPLEXITY_API_KEY environment variable."
-        
-        # Prepare headers
+            return "Error: Perplexity API key not found. Set PERPLEXITY_API_KEY environment variable."
+
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-        
-        # Format all messages for Perplexity
-        formatted_messages = []
-        
-        # Add a system message for better performance
-        formatted_messages.append({
-            "role": "system",
-            "content": "You are a helpful, accurate AI assistant. Provide detailed and informative responses."
-        })
-        
-        # Add chat history
+
+        formatted_messages = [{"role": "system", "content": "You are a helpful AI assistant."}]
         for message in message_history:
             role = "user" if message["role"] == "user" else "assistant"
-            formatted_messages.append({
-                "role": role,
-                "content": message["content"]
-            })
-        
-        # Use the specified model if provided, otherwise use fallback mechanism
-        if model_name:
-            models_to_try = [model_name]
-        else:
-            # List of models to try in order (fallback mechanism)
-            models_to_try = ["pplx-70b-online", "pplx-7b-online", "pplx-70b-chat", "pplx-7b-chat"]
-        
-        # Try each model in sequence until one works
-        last_error = None
-        for model in models_to_try:
-            try:
-                # Prepare request data with model name and parameters
-                data = {
-                    "model": model,  # Try each model in sequence
-                    "messages": formatted_messages,
-                    "max_tokens": 1000,
-                    "temperature": temperature,
-                    "top_p": 0.9,
-                    "stream": False
-                }
-                
-                # Make request to Perplexity API
-                response = requests.post(
-                    "https://api.perplexity.ai/chat/completions",
-                    headers=headers,
-                    json=data
-                )
-                
-                if response.status_code == 200:
-                    return response.json()["choices"][0]["message"]["content"]
-                last_error = f"Error from Perplexity API with model {model}: {response.text}"
-            except Exception as e:
-                last_error = f"Error with Perplexity API using model {model}: {str(e)}"
-        
-        # If we get here, all models failed
-        return f"All Perplexity models failed. Last error: {last_error}"
-    except Exception as e:
-        return f"General error with Perplexity API: {str(e)}"
+            content = message.get("content", "")
+            if isinstance(content, str):
+                formatted_messages.append({"role": role, "content": content})
 
-GEMINI_MODELS = {
-    "gemini-2.5-pro-preview-03-25": "Advanced reasoning",
-    "gemini-2.0-flash": "Real-time chat",
-    "gemini-2.0-flash-lite": "Cost-effective, high throughput",
-    "gemini-1.5-pro": "General purpose",
-    "gemini-1.5-flash": "Fast and versatile",
-    "gemini-1.5-flash-8b": "High volume, lower intelligence",
-    "gemini-embedding-exp": "Text embeddings",
-    "imagen-3.0-generate-002": "Advanced image generation",
-    "veo-2.0-generate-001": "High-quality video generation",
-    "gemini-2.0-flash-live-001": "Low-latency bidirectional interactions"
-}
+        formatted_messages.append({"role": "user", "content": prompt})
+
+        data = {
+            "model": model_name,
+            "messages": formatted_messages,
+            "temperature": temperature,
+        }
+
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=data
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+    except requests.exceptions.RequestException as e:
+         error_details = e.response.text if e.response else "No response details"
+         return f"Error with Perplexity API request ({model_name}): {str(e)} - {error_details}"
+    except Exception as e:
+        return f"Error with Perplexity API ({model_name}): {str(e)}"
+

@@ -70,76 +70,79 @@ THEMES = {
 
 def get_theme(theme_name):
     """Get a specific theme by name, defaulting to Default Blue if not found"""
-    # Corrected default logic to use "Default Blue" if theme_name is not found
     return THEMES.get(theme_name, THEMES["Default Blue"])
 
 def apply_theme(theme_name):
     """Generate CSS for the selected theme"""
-    # Use the corrected get_theme function
     theme = get_theme(theme_name)
-
-    # Update the theme in session state for potential JS use or other checks
     st.session_state.theme = theme
 
-    # Generate custom CSS string
-    # (CSS rules remain the same as before, just using the selected theme colors)
+    # Generate custom CSS string with updated selectors
     css = f"""
     <style>
-        /* Main container styling */
-        .main {{
+        /* Main app background */
+        .stApp {{
             background-color: {theme["background"]};
             color: {theme["text"]};
         }}
 
-        /* Chat container styling */
-        .chat-container {{
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 10px;
-            max-height: 85vh; /* Limit height */
-            overflow-y: auto; /* Enable scroll */
-        }}
-
-        /* User message styling */
-        div[data-testid="chatAvatarIcon-user"] + div div[data-testid="stMarkdownContainer"] > div {{
-             background-color: {theme["message_user_bg"]};
-             border-radius: 15px;
-             padding: 10px 15px;
-             margin-right: 5px; /* Add some space from the avatar */
-             margin-left: 5px;
-             display: inline-block; /* Fit content */
-             max-width: 80%; /* Prevent messages from being too wide */
-        }}
-
-        /* AI message styling */
-         div[data-testid="chatAvatarIcon-assistant"] + div div[data-testid="stMarkdownContainer"] > div {{
-             background-color: {theme["message_ai_bg"]};
-             border-radius: 15px;
-             padding: 10px 15px;
-             margin-right: 5px;
-             margin-left: 5px;
-             display: inline-block; /* Fit content */
-             max-width: 80%; /* Prevent messages from being too wide */
-        }}
-
-        /* Sidebar styling (using a more stable selector if possible) */
+        /* Sidebar styling */
         section[data-testid="stSidebar"] > div:first-child {{
             background-color: {theme["secondary_bg"]};
         }}
 
+        /* Chat message styling using Streamlit's specific data-testid attributes */
+        div[data-testid="stChatMessage"], div[data-testid="stChatMessage"] p {{
+             color: {theme["text"]}; /* Ensure text inside message is colored */
+        }}
+
+        /* User message bubble styling */
+        div[data-testid="stChatMessage"][data-testid*="user"] div[data-testid="stMarkdownContainer"] > div {{
+             background-color: {theme["message_user_bg"]};
+             border-radius: 18px;
+             padding: 10px 15px;
+             margin: 2px 5px; /* Adjust margins slightly */
+             display: inline-block;
+             max-width: 80%;
+             float: right; /* Align user messages to the right */
+             clear: both; /* Ensure proper clearing */
+        }}
+
+        /* AI message bubble styling */
+        div[data-testid="stChatMessage"][data-testid*="assistant"] div[data-testid="stMarkdownContainer"] > div {{
+             background-color: {theme["message_ai_bg"]};
+             border-radius: 18px;
+             padding: 10px 15px;
+             margin: 2px 5px;
+             display: inline-block;
+             max-width: 80%;
+             float: left; /* Align assistant messages to the left */
+             clear: both; /* Ensure proper clearing */
+        }}
+
+        /* Clear floats after each message block to prevent overlap */
+         div[data-testid="stChatMessage"] {{
+             clear: both;
+             overflow: auto; /* Contain floats */
+             margin-bottom: 10px; /* Add space between messages */
+         }}
+
         /* Input box styling */
         .stChatInputContainer {{
             background-color: {theme["secondary_bg"]};
-            border-top: 1px solid {theme["secondary_bg"]}; /* Match background */
-            padding: 10px 15px;
+            border-top: 1px solid #444;
+            padding: 15px 20px; /* More padding */
         }}
-
-         /* Input Text Area */
         textarea[data-testid="stChatInput"] {{
              background-color: {theme["background"]};
              color: {theme["text"]};
              border-radius: 10px;
-             border: 1px solid #444;
+             border: 1px solid #555; /* Slightly lighter border */
+             padding: 10px;
+        }}
+        textarea[data-testid="stChatInput"]:focus {{
+             border-color: {theme["primary"]};
+             box-shadow: 0 0 0 1px {theme["primary"]};
         }}
 
         /* Button styling */
@@ -148,27 +151,32 @@ def apply_theme(theme_name):
             color: white;
             border-radius: 8px;
             border: none;
-            padding: 8px 16px;
+            padding: 10px 18px; /* Slightly larger padding */
+            font-weight: 500;
         }}
         .stButton > button:hover {{
-             opacity: 0.8;
+             filter: brightness(1.1); /* Slight brighten on hover */
+             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
+        .stButton > button:active {{
+             filter: brightness(0.9); /* Slight darken on click */
         }}
 
         /* Dropdown styling */
         .stSelectbox > div > div {{
             background-color: {theme["secondary_bg"]};
             color: {theme["text"]};
-            border: 1px solid #444;
+            border: 1px solid #555;
             border-radius: 8px;
         }}
 
         /* Header styling */
         h1, h2, h3 {{
-            color: {theme["header_color"]}; /* Use specific header color */
+            color: {theme["header_color"]};
         }}
 
         /* General text color */
-        body, p, div, span {{
+        body, p, div, span, label {{
             color: {theme["text"]};
         }}
 
@@ -177,8 +185,13 @@ def apply_theme(theme_name):
            color: {theme["accent"]};
         }}
 
+        /* Center chat container - Requires careful structuring in the Python code */
+        .centered-chat-container {{
+             max-width: 900px; /* Adjust max-width as needed */
+             margin: auto; /* Center horizontally */
+             /* Add padding or other styles if desired */
+        }}
+
     </style>
     """
-
-    # Return the CSS string to be applied using st.markdown
     return css
