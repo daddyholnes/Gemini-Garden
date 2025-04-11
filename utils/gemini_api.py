@@ -140,53 +140,60 @@ def prepare_chat_history(conversation_history: List[Dict[str, Any]]) -> List[Dic
     
     return chat_history
 
-def get_gemini_response(
-    prompt: str, 
-    conversation_history: List[Dict[str, Any]], 
-    image_data: Optional[str] = None, 
-    audio_data: Optional[str] = None, 
-    screen_data: Optional[str] = None,
-    temperature: float = DEFAULT_TEMPERATURE, 
-    model_name: str = DEFAULT_MODEL
-) -> str:
+def get_gemini_response(prompt: str, message_history: List[Dict[str, str]], image_data=None, audio_data=None, temperature=0.7, model_name="gemini-1.5-pro") -> str:
     """
-    Get a response from the Gemini model with multimodal inputs.
+    Get a response from the Gemini AI model.
     
     Args:
-        prompt: User's text input
-        conversation_history: List of message dictionaries
-        image_data: Base64-encoded image data
-        audio_data: Base64-encoded audio data
-        screen_data: Base64-encoded screenshot data
-        temperature: Temperature for response generation
-        model_name: Gemini model version to use
-    
+        prompt: The user's input prompt
+        message_history: Previous message history
+        image_data: Optional base64 encoded image data for multimodal prompts
+        audio_data: Optional base64 encoded audio data
+        temperature: Temperature for response generation (creativity)
+        model_name: The specific Gemini model to use (e.g., "gemini-1.5-pro", "gemini-2.5-pro-preview")
+        
     Returns:
-        str: AI response text
+        The AI response text
     """
     try:
-        # Select the appropriate model
-        model = genai.GenerativeModel(model_name)
-        
-        # Prepare the content parts
-        content_parts = prepare_content_parts(prompt, image_data, audio_data, screen_data)
-        
-        # Prepare the chat history from conversation history
-        chat_history = prepare_chat_history(conversation_history[:-1])  # Exclude the last message (current prompt)
-        
-        # Start a chat session
-        chat = model.start_chat(history=chat_history)
-        
-        # Generate response
-        response = chat.send_message(
-            content_parts, 
+        import google.generativeai as genai
+        import base64
+        from PIL import Image
+        import io
+
+        # Get API key from environment variables
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            return "Error: Gemini API key not found. Please set the GEMINI_API_KEY environment variable."
+
+        # Configure the Gemini API
+        genai.configure(api_key=api_key)
+
+        # Convert message history to the format expected by Gemini
+        formatted_history = []
+        for message in message_history:
+            role = "user" if message["role"] == "user" else "model"
+            formatted_history.append({"role": role, "parts": [message["content"]]})
+
+        # Create a Gemini model instance with generation config
+        model = genai.GenerativeModel(
+            model_name,
             generation_config={"temperature": temperature}
         )
-        
+
+        # Prepare multimodal content
+        contents = [{"text": prompt}]
+        if image_data:
+            contents.append({"inline_data": {"mime_type": "image/jpeg", "data": image_data}})
+        if audio_data:
+            contents.append({"inline_data": {"mime_type": "audio/wav", "data": audio_data}})
+
+        # Generate response with multimodal input
+        response = model.generate_content(contents)
         return response.text
-        
+
     except Exception as e:
-        return f"Error with Gemini model: {str(e)}"
+        return f"Error with Gemini API: {str(e)}"
 
 def get_gemini_streaming_response(
     prompt: str, 

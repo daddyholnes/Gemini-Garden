@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.gemini_api import get_model_personality
+from utils.gemini_api import get_gemini_response
 from utils.themes import apply_theme
 
 # Set page configuration
@@ -47,10 +47,11 @@ with chat_container:
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         # Placeholder for AI response
-        ai_response = get_model_personality(
-            user_id=1,  # Replace with actual user ID
-            model_name="gemini-2.0-pro",
-            personality_name=selected_personality.lower()
+        ai_response = get_gemini_response(
+            prompt=user_input,
+            message_history=st.session_state.messages,
+            model_name="gemini-2.0-flash",
+            temperature=0.7
         )
         st.session_state.messages.append({"role": "assistant", "content": ai_response})
         st.experimental_rerun()
