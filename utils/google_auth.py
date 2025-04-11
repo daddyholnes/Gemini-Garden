@@ -42,12 +42,12 @@ def init_auth_tables():
                 )
             ''')
 
-            # Create sessions table if not exists
+            # Create sessions table with nullable token
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS sessions (
                     id SERIAL PRIMARY KEY,
                     username VARCHAR(255) NOT NULL,
-                    token VARCHAR(255) UNIQUE NOT NULL,
+                    token VARCHAR(255) NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP NOT NULL,
                     FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
@@ -193,6 +193,14 @@ def check_login():
     """
     Check if a user is logged in via local authentication.
     """
+    # Development environment bypass
+    if os.getenv("ENV") == "development":
+        if "user" not in st.session_state:
+            st.session_state.user = {"username": "dev", "is_admin": True}
+            st.session_state.is_authenticated = True
+            st.rerun()
+        return
+
     init_auth_tables()
 
     if "user" not in st.session_state:
@@ -208,17 +216,25 @@ def show_login_page():
     """Display the login page."""
     st.title("Login")
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login")
 
-    if st.button("Login"):
-        is_authenticated, user_info = authenticate_user(username, password)
-        if is_authenticated:
-            st.session_state.user = user_info
-            st.session_state.is_authenticated = True
-            st.rerun()
-        else:
-            st.error("Invalid username or password")
+        if submitted:
+            with st.spinner("Authenticating..."):
+                import time
+                time.sleep(0.5)  # Short delay for visual feedback
+                is_authenticated, user_info = authenticate_user(username, password)
+                
+                if is_authenticated:
+                    st.success("Login successful! Redirecting...")
+                    st.session_state.user = user_info
+                    st.session_state.is_authenticated = True
+                    time.sleep(0.5)  # Give time for success message to be seen
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
 
 def logout_user():
     """Log out the current user."""

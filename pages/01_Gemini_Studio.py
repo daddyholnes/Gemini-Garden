@@ -21,19 +21,12 @@ from PIL import Image
 import tempfile
 
 # Import Gemini-specific utilities
-# from utils.gemini_api import (
-#     initialize_gemini, 
-#     get_gemini_models,
-#     get_gemini_response,
-#     get_gemini_streaming_response
-# )
-
-# Placeholder functions for local AI model interactions
-def initialize_local_ai():
-    return True
-
-def get_local_ai_response(prompt, **kwargs):
-    return "This is a placeholder response from the local AI model."
+from utils.gemini_api import (
+    initialize_gemini,
+    get_gemini_models,
+    get_gemini_response,
+    get_gemini_streaming_response
+)
 
 # Import database utilities for conversation storage
 from utils.database import (
@@ -69,6 +62,8 @@ check_login()
 # Initialize session state for this page
 if "gemini_messages" not in st.session_state:
     st.session_state.gemini_messages = []
+if "current_model" not in st.session_state:
+    st.session_state.current_model = "gemini-1.5-pro"
 if "gemini_current_model" not in st.session_state:
     st.session_state.gemini_current_model = "gemini-1.5-pro"
 if "gemini_temperature" not in st.session_state:
@@ -92,7 +87,7 @@ if "gemini_message_cooldown" not in st.session_state:
 init_db()
 
 # Initialize Gemini API
-ai_initialized = initialize_local_ai()
+ai_initialized = initialize_gemini()
 
 def encode_image(uploaded_file):
     """Encode an uploaded file to base64 string"""
@@ -236,84 +231,58 @@ def main():
         # Custom CSS for chat styling
         st.markdown("""
         <style>
-        .chat-container {
-            height: 500px !important;
-            overflow-y: auto;
-            padding-right: 15px;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            background-color: rgba(40, 40, 40, 0.2);
+        .css-1r6slb0 {  /* Override default chat container */
+            overflow-y: auto !important;
+            max-height: 600px !important;
+            margin-bottom: 20px !important;
+        }
+        .stChatMessage {
+            background-color: #1e1e1e !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+            margin-bottom: 10px !important;
+        }
+        .stChatMessageContent {
+            color: white !important;
+            white-space: pre-wrap !important;
+        }
+        .stChatMessage.user {
+            background-color: #272727 !important;
         }
         </style>
         """, unsafe_allow_html=True)
         
-        # Create a taller fixed-height container for chat messages
-        chat_container = st.container(height=500, border=False)
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        
         # Display chat messages
-        with chat_container:
-            for i, message in enumerate(st.session_state.gemini_messages):
+        messages_container = st.container()
+        with messages_container:
+            for message in st.session_state.gemini_messages:
                 is_user = message["role"] == "user"
                 
-                # Create message container with avatar
-                avatar_color = "#f50057" if is_user else "#8c52ff"
-                avatar_icon = "👤" if is_user else "🤖"
-                bg_color = "#1e1e1e" if is_user else "#272727"
-                
-                # Handle text content
-                if isinstance(message["content"], str):
-                    message_content = message["content"]
-                    st.markdown(f"""
-                    <div style="display: flex; align-items: start; margin-bottom: 10px;">
-                        <div style="background-color: {avatar_color}; color: white; border-radius: 50%; height: 32px; width: 32px; display: flex; align-items: center; justify-content: center; margin-right: 10px; flex-shrink: 0;">
-                            <span>{avatar_icon}</span>
-                        </div>
-                        <div style="background-color: {bg_color}; border-radius: 10px; padding: 10px; max-width: 90%;">
-                            <p style="margin: 0; color: white; white-space: pre-wrap;">{message_content.replace(chr(10), '<br>')}</p>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Create message bubbles
+                if is_user:
+                    st.chat_message("user").write(message["content"])
+                else:
+                    st.chat_message("assistant").write(message["content"])
                     
-                # Handle multimodal content
-                elif isinstance(message["content"], list):
-                    # First render the text part
-                    text_parts = [part for part in message["content"] if isinstance(part, str)]
-                    text_content = "\n".join(text_parts) if text_parts else ""
-                    
-                    st.markdown(f"""
-                    <div style="display: flex; align-items: start; margin-bottom: 10px;">
-                        <div style="background-color: {avatar_color}; color: white; border-radius: 50%; height: 32px; width: 32px; display: flex; align-items: center; justify-content: center; margin-right: 10px; flex-shrink: 0;">
-                            <span>{avatar_icon}</span>
-                        </div>
-                        <div style="background-color: {bg_color}; border-radius: 10px; padding: 10px; max-width: 90%;">
-                            <p style="margin: 0; color: white; white-space: pre-wrap;">{text_content.replace(chr(10), '<br>')}</p>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Then render any images
+                # Handle multimodal content if present
+                if isinstance(message.get("content"), list):
                     for part in message["content"]:
-                        if isinstance(part, dict) and part.get("type") == "image" and part.get("data"):
-                            try:
-                                image_data = base64.b64decode(part["data"])
-                                image = Image.open(BytesIO(image_data))
-                                st.image(image, caption="Uploaded Image", width=300)
-                            except Exception as e:
-                                st.error(f"Could not display image: {str(e)}")
-                        
-                        elif isinstance(part, dict) and part.get("type") == "audio" and part.get("data"):
-                            try:
-                                audio_data = base64.b64decode(part["data"])
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                                    tmp.write(audio_data)
-                                    tmp_path = tmp.name
-                                st.audio(tmp_path)
-                            except Exception as e:
-                                st.error(f"Could not play audio: {str(e)}")
-        
-        # Close the chat container
-        st.markdown('</div>', unsafe_allow_html=True)
+                        if isinstance(part, dict):
+                            if part.get("type") == "image" and part.get("data"):
+                                try:
+                                    image_data = base64.b64decode(part["data"])
+                                    image = Image.open(BytesIO(image_data))
+                                    st.image(image, caption="Shared Image", use_column_width=True)
+                                except Exception as e:
+                                    st.error(f"Could not display image: {str(e)}")
+                            elif part.get("type") == "audio" and part.get("data"):
+                                try:
+                                    audio_data = base64.b64decode(part["data"])
+                                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+                                        tmp.write(audio_data)
+                                        st.audio(tmp.name)
+                                except Exception as e:
+                                    st.error(f"Could not play audio: {str(e)}")
         
         # Multimodal input options
         input_tabs = st.tabs(["Image Upload", "Webcam", "Audio Recording", "Screen Share"])
@@ -423,139 +392,115 @@ def main():
                 clear_multimodal_inputs()
                 st.rerun()
         
-        # Message input
-        user_input = st.text_area("Type your message here", height=100, max_chars=1000)
-        
-        # Send button
-        if st.button("Send", use_container_width=True, type="primary"):
-            if st.session_state.gemini_message_cooldown:
-                st.warning("Message already sent! Please wait a moment...")
-                return
+        # Message input area
+        chat_container = st.container()
+        with chat_container:
+            if user_input := st.chat_input("Message the AI...", key="chat_input_main"):
+                # Prevent double submissions
+                if "processing_message" in st.session_state:
+                    st.info("Message already being processed...")
+                    return
+                    
+                st.session_state.processing_message = True
                 
-            # Set cooldown
-            st.session_state.gemini_message_cooldown = True
-            
-            # Check if there's any input (text or multimodal)
-            if not user_input and not has_image and not has_audio and not has_screen:
-                st.warning("Please enter a message or add an image/audio input")
-                st.session_state.gemini_message_cooldown = False
-                return
-            
-            # Create message content
-            message_content = []
-            
-            # Add text content if provided
-            if user_input:
-                message_content.append(user_input)
-            
-            # Add image if provided
-            if has_image:
-                image_data = st.session_state.gemini_uploaded_image or st.session_state.gemini_webcam_image
-                message_content.append({
-                    "type": "image",
-                    "data": image_data
-                })
-            
-            # Add audio if provided
-            if has_audio:
-                message_content.append({
-                    "type": "audio",
-                    "data": st.session_state.gemini_audio_data
-                })
-            
-            # Add screen share if provided
-            if has_screen:
-                message_content.append({
-                    "type": "image",
-                    "data": st.session_state.gemini_screen_share
-                })
-            
-            # Create user message - use the first text part as content if multimodal
-            if len(message_content) == 1 and isinstance(message_content[0], str):
-                # Simple text message
-                user_message = {"role": "user", "content": message_content[0]}
-            else:
-                # Multimodal message
-                user_message = {"role": "user", "content": message_content}
-            
-            # Add message to history
-            st.session_state.gemini_messages.append(user_message)
-            
-            # Clear multimodal inputs after sending
-            clear_multimodal_inputs()
-            
-            # Display "AI is thinking" message
-            with st.spinner(f"AI is thinking... using {st.session_state.gemini_current_model}"):
                 try:
-                    # Extract multimodal content
-                    image_data = None
-                    audio_data = None
-                    
-                    if isinstance(user_message["content"], list):
-                        for part in user_message["content"]:
-                            if isinstance(part, dict):
-                                if part.get("type") == "image":
-                                    image_data = part.get("data")
-                                elif part.get("type") == "audio":
-                                    audio_data = part.get("data")
-                    
-                    # Use input text or empty string if content is multimodal
-                    user_text = user_input or "Analyze this"
-                    
-                    if st.session_state.gemini_streaming:
-                        # Create a placeholder for streaming output
-                        response_placeholder = st.empty()
-                        full_response = ""
-                        
-                        # Get streaming response
-                        for chunk in get_local_ai_response(
-                            prompt=user_text,
-                            conversation_history=st.session_state.gemini_messages,
-                            image_data=image_data,
-                            audio_data=audio_data,
-                            temperature=st.session_state.gemini_temperature
-                        ):
-                            # Update response with new chunk
-                            full_response += chunk
-                            # Display the updated response with blinking cursor
-                            response_placeholder.markdown(f"{full_response}▌")
-                            time.sleep(0.01)  # Small delay for smooth animation
-                        
-                        # Add AI response to messages
+                    with st.spinner("Processing message..."):
+                        # Add user message to chat
                         st.session_state.gemini_messages.append({
-                            "role": "assistant", 
-                            "content": full_response
+                            "role": "user", 
+                            "content": user_input
                         })
                         
-                        # Remove the placeholder
-                        response_placeholder.empty()
-                    else:
-                        # Get complete response (non-streaming)
-                        ai_response = get_local_ai_response(
-                            prompt=user_text,
-                            conversation_history=st.session_state.gemini_messages,
-                            image_data=image_data,
-                            audio_data=audio_data,
-                            temperature=st.session_state.gemini_temperature
-                        )
-                        
-                        # Add AI response to messages
-                        st.session_state.gemini_messages.append({
-                            "role": "assistant", 
-                            "content": ai_response
-                        })
-                        
-                    # Save conversation to database
-                    save_current_conversation()
-                    
+                        # Get AI response based on selected model
+                        with st.spinner(f"Thinking... using {st.session_state.gemini_current_model}"):
+                            try:
+                                # Get any multimodal content
+                                multimodal_content = []
+                                
+                                # Add image if present
+                                if st.session_state.gemini_uploaded_image:
+                                    multimodal_content.append({
+                                        "type": "image",
+                                        "data": st.session_state.gemini_uploaded_image
+                                    })
+                                elif st.session_state.gemini_webcam_image:
+                                    multimodal_content.append({
+                                        "type": "image",
+                                        "data": st.session_state.gemini_webcam_image
+                                    })
+                                elif st.session_state.gemini_screen_share:
+                                    multimodal_content.append({
+                                        "type": "image",
+                                        "data": st.session_state.gemini_screen_share
+                                    })
+                                
+                                # Add audio if present
+                                if st.session_state.gemini_audio_data:
+                                    multimodal_content.append({
+                                        "type": "audio",
+                                        "data": st.session_state.gemini_audio_data
+                                    })
+                                
+                                # Prepare the message content
+                                message_content = [user_input]
+                                message_content.extend(multimodal_content)
+                                
+                                # Get AI response
+                                if st.session_state.gemini_streaming:
+                                    # For streaming responses
+                                    response_placeholder = st.empty()
+                                    full_response = ""
+                                    
+                                    for response_chunk in get_gemini_streaming_response(
+                                        prompt=user_input,
+                                        conversation_history=st.session_state.gemini_messages,
+                                        image_data=st.session_state.gemini_uploaded_image or st.session_state.gemini_webcam_image or st.session_state.gemini_screen_share,
+                                        audio_data=st.session_state.gemini_audio_data,
+                                        temperature=st.session_state.gemini_temperature,
+                                        model_name=st.session_state.gemini_current_model
+                                    ):
+                                        full_response += response_chunk
+                                        response_placeholder.markdown(full_response)
+                                    
+                                    response = full_response
+                                else:
+                                    # For non-streaming responses
+                                    response = get_gemini_response(
+                                        prompt=user_input,
+                                        conversation_history=st.session_state.gemini_messages,
+                                        image_data=st.session_state.gemini_uploaded_image or st.session_state.gemini_webcam_image or st.session_state.gemini_screen_share,
+                                        audio_data=st.session_state.gemini_audio_data,
+                                        temperature=st.session_state.gemini_temperature,
+                                        model_name=st.session_state.gemini_current_model
+                                    )
+                                
+                                # Add AI response to chat
+                                st.session_state.gemini_messages.append({
+                                    "role": "assistant",
+                                    "content": response
+                                })
+                                
+                                # Clear multimodal inputs after successful processing
+                                clear_multimodal_inputs()
+                                
+                            except Exception as e:
+                                st.error(f"Error generating response: {str(e)}")
+                            finally:
+                                # Clear processing flag
+                                if "processing_message" in st.session_state:
+                                    del st.session_state.processing_message
+                            
+                        # Save conversation after adding message
+                        save_current_conversation()
+                                    
+                        # Rerun to update UI
+                        st.rerun()
                 except Exception as e:
-                    st.error(f"Error generating response: {str(e)}")
+                    st.error(f"Error: {str(e)}")
                 finally:
-                    # Reset cooldown
-                    st.session_state.gemini_message_cooldown = False
-            
-            # Rerun to update UI
-            st.rerun()
+                    # Ensure processing flag is cleared even if an error occurs
+                    if "processing_message" in st.session_state:
+                        del st.session_state.processing_message
 
 
 # Call main function
