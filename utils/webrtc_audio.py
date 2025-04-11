@@ -229,7 +229,7 @@ def audio_recorder_ui(
                 max_duration=selected_duration
             )
             
-            st.experimental_rerun()
+            st.rerun()
     
     # Display recorded audio playback
     if show_playback and st.session_state[f"{key}_file_path"]:

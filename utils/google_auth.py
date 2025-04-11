@@ -216,7 +216,7 @@ def show_login_page():
         if is_authenticated:
             st.session_state.user = user_info
             st.session_state.is_authenticated = True
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Invalid username or password")
 
@@ -228,7 +228,7 @@ def logout_user():
 
     st.session_state.user = None
     st.session_state.is_authenticated = False
-    st.experimental_rerun()
+    st.rerun()
 
 def get_current_user():
     """
@@ -245,3 +245,15 @@ def is_admin():
     if st.session_state.is_authenticated and st.session_state.user:
         return st.session_state.user.get("is_admin", False)
     return False
+
+def check_google_auth():
+    # ... existing code ...
+    if "google_auth_state" in st.session_state:
+        del st.session_state["google_auth_state"]
+        st.rerun()
+    
+    # ... existing code ...
+    if st.button("Sign out"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()

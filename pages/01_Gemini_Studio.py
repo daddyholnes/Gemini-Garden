@@ -229,7 +229,7 @@ def main():
             st.session_state.gemini_chat_id = None
             clear_multimodal_inputs()
             st.sidebar.success("Started new conversation")
-            st.experimental_rerun()
+            st.rerun()
             
     # Main chat area (col1)
     with col1:
@@ -331,7 +331,7 @@ def main():
                 # Show removal button
                 if st.button("Remove uploaded image"):
                     st.session_state.gemini_uploaded_image = None
-                    st.experimental_rerun()
+                    st.rerun()
         
         # Webcam tab
         with input_tabs[1]:
@@ -346,7 +346,7 @@ def main():
                 # Show removal button
                 if st.button("Remove webcam image"):
                     st.session_state.gemini_webcam_image = None
-                    st.experimental_rerun()
+                    st.rerun()
         
         # Audio recording tab
         with input_tabs[2]:
@@ -374,7 +374,7 @@ def main():
                 if st.button("Remove recorded audio"):
                     st.session_state.gemini_audio_data = None
                     st.session_state.gemini_audio_path = None
-                    st.experimental_rerun()
+                    st.rerun()
         
         # Screen share tab
         with input_tabs[3]:
@@ -392,7 +392,7 @@ def main():
                 # Show removal button
                 if st.button("Remove screenshot"):
                     st.session_state.gemini_screen_share = None
-                    st.experimental_rerun()
+                    st.rerun()
             
             # Note about screen sharing
             st.info("Note: Native screen sharing capabilities will be added in a future update")
@@ -421,7 +421,7 @@ def main():
             # Add a button to clear all multimodal inputs
             if st.button("Clear all inputs"):
                 clear_multimodal_inputs()
-                st.experimental_rerun()
+                st.rerun()
         
         # Message input
         user_input = st.text_area("Type your message here", height=100, max_chars=1000)
@@ -555,7 +555,8 @@ def main():
                     st.session_state.gemini_message_cooldown = False
             
             # Rerun to update UI
-            st.experimental_rerun()
+            st.rerun()
+
 
 # Call main function
 if __name__ == "__main__":
