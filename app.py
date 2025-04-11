@@ -4,6 +4,16 @@ load_dotenv() # Load environment variables from .env file
 import streamlit as st
 import os
 
+# --- Function to load CSS ---
+def load_css(file_path):
+    try:
+        with open(file_path, "r") as f:
+            css = f.read()
+        return f"<style>{css}</style>"
+    except FileNotFoundError:
+        st.error(f"CSS file not found at {file_path}")
+        return ""
+
 # --- Page Configuration (Must be the first Streamlit command) ---
 st.set_page_config(
     page_title="Gemini's Garden", # Updated title
@@ -12,7 +22,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Minimalist App Entry Point --- 
+# --- Apply Custom CSS ---
+# Load the CSS from the specified path
+custom_css = load_css("docs/UI/css/main.css")
+if custom_css:
+    st.markdown(custom_css, unsafe_allow_html=True)
+
+# --- Minimalist App Entry Point ---
 # This file now primarily serves to set the page config.
 # Streamlit automatically discovers and lists files in the 'pages/' directory
 # in the sidebar for navigation.
@@ -23,13 +39,6 @@ st.set_page_config(
 
 st.title("Welcome to Gemini's Garden")
 st.write("Please select a page from the sidebar to begin.")
-
-# Example: Applying theme globally (optional, can also be done per-page)
-# from utils.themes import apply_theme
-# if "current_theme" not in st.session_state:
-#     st.session_state.current_theme = "Dark Purple" # Your default theme
-# css = apply_theme(st.session_state.current_theme)
-# st.markdown(css, unsafe_allow_html=True)
 
 # --- Authentication Check (Optional - Keeping it simple for now) ---
 # We are bypassing authentication for now to use the multipage structure directly.
@@ -42,6 +51,5 @@ st.write("Please select a page from the sidebar to begin.")
 # from utils.database import init_db
 # init_db() # Initialize DB tables if needed globally
 
-# The rest of the UI and application logic is now handled by the files 
+# The rest of the UI and application logic is now handled by the files
 # in the 'pages/' directory (e.g., pages/00_Main_Chat.py).
-

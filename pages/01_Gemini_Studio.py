@@ -42,8 +42,15 @@ from utils.auth import check_login, get_current_user
 # Audio utilities 
 from utils.webrtc_audio import audio_recorder_ui
 
-# Apply the same theme as the main app
-from utils.themes import apply_theme
+# --- Function to load CSS ---
+def load_css(file_path):
+    try:
+        with open(file_path, "r") as f:
+            css = f.read()
+        return f"<style>{css}</style>"
+    except FileNotFoundError:
+        st.error(f"CSS file not found at {file_path}")
+        return ""
 
 # Set page title and icon
 st.set_page_config(
@@ -52,9 +59,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Apply theme 
-theme_css = apply_theme(st.session_state.get("current_theme", "Amazon Q Purple"))
-st.markdown(theme_css, unsafe_allow_html=True)
+# --- Apply Custom CSS ---
+# Load the CSS from the specified path
+custom_css = load_css("docs/UI/css/main.css")
+if custom_css:
+    st.markdown(custom_css, unsafe_allow_html=True)
 
 # Check user login
 check_login()
@@ -109,13 +118,13 @@ def load_or_initialize_conversation():
     username = get_current_user()
     if not username:
         return
-        
+
     # Load most recent conversation for this model
     chat_id, messages = get_most_recent_chat(
         username=username,
         model=st.session_state.gemini_current_model
     )
-    
+
     if chat_id and messages:
         st.session_state.gemini_messages = messages
         st.session_state.gemini_chat_id = chat_id
@@ -129,7 +138,7 @@ def save_current_conversation():
     username = get_current_user()
     if not username:
         return
-        
+
     # Save conversation with the current model
     save_conversation(
         username=username,
@@ -139,7 +148,7 @@ def save_current_conversation():
 
 def main():
     """Main function for the Gemini Studio page"""
-    
+
     # Display header
     st.markdown(f"""
     <div style="text-align: center; padding: 20px 0;">
@@ -152,72 +161,72 @@ def main():
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     # Check if Gemini API is initialized
     if not ai_initialized:
         st.error("AI model not initialized. Please check your configuration.")
         return
-    
+
     # Create a two-column layout: Chat area and sidebar
     col1, col2 = st.columns([4, 1])
-    
+
     # Sidebar (col2) - Configuration options
     with col2:
         st.sidebar.title("Gemini Settings")
-        
+
         # Model selection
         st.sidebar.subheader("Model")
         model_options = [
-            "gemini-1.5-pro", 
-            "gemini-1.5-flash", 
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
             "gemini-2.0-pro",
             "gemini-2.0-pro-vision",
             "gemini-2.0-flash"
         ]
-        
+
         selected_model = st.sidebar.selectbox(
-            "Select Gemini Model", 
+            "Select Gemini Model",
             options=model_options,
             index=model_options.index(st.session_state.gemini_current_model)
             if st.session_state.gemini_current_model in model_options else 0
         )
-        
+
         # Update the model in session state if changed
         if selected_model != st.session_state.gemini_current_model:
             st.session_state.gemini_current_model = selected_model
             # Load conversation for the new model
             load_or_initialize_conversation()
             st.sidebar.success(f"Loaded conversations for {selected_model}")
-        
+
         # Temperature slider
         st.sidebar.subheader("Generation Settings")
         temperature = st.sidebar.slider(
-            "Temperature", 
-            min_value=0.0, 
-            max_value=1.0, 
+            "Temperature",
+            min_value=0.0,
+            max_value=1.0,
             value=st.session_state.gemini_temperature,
             step=0.1,
             help="Higher values make output more random, lower values more focused"
         )
-        
+
         # Update temperature if changed
         if temperature != st.session_state.gemini_temperature:
             st.session_state.gemini_temperature = temperature
-        
+
         # Streaming toggle
         streaming = st.sidebar.checkbox(
-            "Enable streaming responses", 
+            "Enable streaming responses",
             value=st.session_state.gemini_streaming,
             help="Show AI responses as they are generated"
         )
-        
+
         # Update streaming setting if changed
         if streaming != st.session_state.gemini_streaming:
             st.session_state.gemini_streaming = streaming
-        
+
         # Conversation management section
         st.sidebar.subheader("Conversation")
-        
+
         # New conversation button
         if st.sidebar.button("Start New Conversation", use_container_width=True):
             st.session_state.gemini_messages = []
@@ -225,7 +234,7 @@ def main():
             clear_multimodal_inputs()
             st.sidebar.success("Started new conversation")
             st.rerun()
-            
+
         # Sidebar for personality selection
         st.sidebar.title("Personality Selector")
         st.sidebar.markdown("Select a personality for the AI model:")
@@ -239,45 +248,21 @@ def main():
             if st.sidebar.button("Save Custom Personality"):
                 st.session_state.custom_personality = custom_instructions
                 st.sidebar.success("Custom personality saved!")
-        
+
     # Main chat area (col1)
     with col1:
-        # Custom CSS for chat styling
-        st.markdown("""
-        <style>
-        .css-1r6slb0 {  /* Override default chat container */
-            overflow-y: auto !important;
-            max-height: 600px !important;
-            margin-bottom: 20px !important;
-        }
-        .stChatMessage {
-            background-color: #1e1e1e !important;
-            border-radius: 10px !important;
-            padding: 10px !important;
-            margin-bottom: 10px !important;
-        }
-        .stChatMessageContent {
-            color: white !important;
-            white-space: pre-wrap !important;
-        }
-        .stChatMessage.user {
-            background-color: #272727 !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
         # Display chat messages
         messages_container = st.container()
         with messages_container:
             for message in st.session_state.gemini_messages:
                 is_user = message["role"] == "user"
-                
+
                 # Create message bubbles
                 if is_user:
                     st.chat_message("user").write(message["content"])
                 else:
                     st.chat_message("assistant").write(message["content"])
-                    
+
                 # Handle multimodal content if present
                 if isinstance(message.get("content"), list):
                     for part in message["content"]:
@@ -297,45 +282,45 @@ def main():
                                         st.audio(tmp.name)
                                 except Exception as e:
                                     st.error(f"Could not play audio: {str(e)}")
-        
+
         # Multimodal input options
         input_tabs = st.tabs(["Image Upload", "Webcam", "Audio Recording", "Screen Share"])
-        
+
         # Image upload tab
         with input_tabs[0]:
             uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
             if uploaded_file:
                 # Save the uploaded image to session state
                 st.session_state.gemini_uploaded_image = encode_image(uploaded_file)
-                
+
                 # Preview the image
                 st.image(uploaded_file, caption="Image ready for analysis", width=300)
-                
+
                 # Show removal button
                 if st.button("Remove uploaded image"):
                     st.session_state.gemini_uploaded_image = None
                     st.rerun()
-        
+
         # Webcam tab
         with input_tabs[1]:
             st.markdown("### Webcam Capture")
             st.markdown("Take a photo with your webcam to include in the conversation")
-            
+
             webcam_image = st.camera_input("Take a photo")
             if webcam_image:
                 # Save webcam image to session state
                 st.session_state.gemini_webcam_image = encode_image(webcam_image)
-                
+
                 # Show removal button
                 if st.button("Remove webcam image"):
                     st.session_state.gemini_webcam_image = None
                     st.rerun()
-        
+
         # Audio recording tab
         with input_tabs[2]:
             st.markdown("### Audio Recording")
             st.markdown("Record audio to include in the conversation")
-            
+
             # Use WebRTC audio recorder
             base64_audio = audio_recorder_ui(
                 key="gemini_webrtc_recorder",
@@ -345,49 +330,49 @@ def main():
                 show_description=True,
                 show_playback=True
             )
-            
+
             if base64_audio:
                 st.session_state.gemini_audio_data = base64_audio
                 st.session_state.gemini_audio_path = st.session_state.get("gemini_webrtc_recorder_file_path")
-                
+
                 st.success("Audio recorded successfully!")
                 st.info("You can now send a message to analyze this audio.")
-                
+
                 # Show removal button
                 if st.button("Remove recorded audio"):
                     st.session_state.gemini_audio_data = None
                     st.session_state.gemini_audio_path = None
                     st.rerun()
-        
+
         # Screen share tab
         with input_tabs[3]:
             st.markdown("### Screen Share")
             st.markdown("Currently, screen sharing requires manual screenshot uploads")
-            
+
             screen_file = st.file_uploader("Upload a screenshot", type=["jpg", "jpeg", "png"], key="screen_upload")
             if screen_file:
                 # Save screenshot to session state
                 st.session_state.gemini_screen_share = encode_image(screen_file)
-                
+
                 # Preview the screenshot
                 st.image(screen_file, caption="Screenshot ready for analysis", width=300)
-                
+
                 # Show removal button
                 if st.button("Remove screenshot"):
                     st.session_state.gemini_screen_share = None
                     st.rerun()
-            
+
             # Note about screen sharing
             st.info("Note: Native screen sharing capabilities will be added in a future update")
-        
+
         # Text input area
         st.markdown("### Message Input")
-        
+
         # Get multimodal status
         has_image = st.session_state.gemini_uploaded_image is not None or st.session_state.gemini_webcam_image is not None
         has_audio = st.session_state.gemini_audio_data is not None
         has_screen = st.session_state.gemini_screen_share is not None
-        
+
         # Show active multimodal inputs
         if has_image or has_audio or has_screen:
             status_items = []
@@ -397,15 +382,15 @@ def main():
                 status_items.append("🎤 Audio")
             if has_screen:
                 status_items.append("🖥️ Screen")
-                
+
             status_text = ", ".join(status_items)
             st.info(f"Active inputs: {status_text}")
-            
+
             # Add a button to clear all multimodal inputs
             if st.button("Clear all inputs"):
                 clear_multimodal_inputs()
                 st.rerun()
-        
+
         # Message input area
         chat_container = st.container()
         with chat_container:
@@ -414,23 +399,23 @@ def main():
                 if "processing_message" in st.session_state:
                     st.info("Message already being processed...")
                     return
-                    
+
                 st.session_state.processing_message = True
-                
+
                 try:
                     with st.spinner("Processing message..."):
                         # Add user message to chat
                         st.session_state.gemini_messages.append({
-                            "role": "user", 
+                            "role": "user",
                             "content": user_input
                         })
-                        
+
                         # Get AI response based on selected model
                         with st.spinner(f"Thinking... using {st.session_state.gemini_current_model}"):
                             try:
                                 # Get any multimodal content
                                 multimodal_content = []
-                                
+
                                 # Add image if present
                                 if st.session_state.gemini_uploaded_image:
                                     multimodal_content.append({
@@ -447,24 +432,24 @@ def main():
                                         "type": "image",
                                         "data": st.session_state.gemini_screen_share
                                     })
-                                
+
                                 # Add audio if present
                                 if st.session_state.gemini_audio_data:
                                     multimodal_content.append({
                                         "type": "audio",
                                         "data": st.session_state.gemini_audio_data
                                     })
-                                
+
                                 # Prepare the message content
                                 message_content = [user_input]
                                 message_content.extend(multimodal_content)
-                                
+
                                 # Get AI response
                                 if st.session_state.gemini_streaming:
                                     # For streaming responses
                                     response_placeholder = st.empty()
                                     full_response = ""
-                                    
+
                                     for response_chunk in get_gemini_streaming_response(
                                         prompt=user_input,
                                         conversation_history=st.session_state.gemini_messages,
@@ -475,7 +460,7 @@ def main():
                                     ):
                                         full_response += response_chunk
                                         response_placeholder.markdown(full_response)
-                                    
+
                                     response = full_response
                                 else:
                                     # For non-streaming responses
@@ -487,26 +472,26 @@ def main():
                                         temperature=st.session_state.gemini_temperature,
                                         model_name=st.session_state.gemini_current_model
                                     )
-                                
+
                                 # Add AI response to chat
                                 st.session_state.gemini_messages.append({
                                     "role": "assistant",
                                     "content": response
                                 })
-                                
+
                                 # Clear multimodal inputs after successful processing
                                 clear_multimodal_inputs()
-                                
+
                             except Exception as e:
                                 st.error(f"Error generating response: {str(e)}")
                             finally:
                                 # Clear processing flag
                                 if "processing_message" in st.session_state:
                                     del st.session_state.processing_message
-                            
+
                         # Save conversation after adding message
                         save_current_conversation()
-                                    
+
                         # Rerun to update UI
                         st.rerun()
                 except Exception as e:
