@@ -1,10 +1,19 @@
 import streamlit as st
 import os
-# Import model and theme utilities
+# Import model utilities
 from utils.models import generate_chat_response, SUPPORTED_MODELS
-from utils.themes import apply_theme
 # Import GCS history functions
-from utils.gcs_history import load_history, save_history, delete_history 
+from utils.gcs_history import load_history, save_history, delete_history
+
+# --- Function to load CSS ---
+def load_css(file_path):
+    try:
+        with open(file_path, "r") as f:
+            css = f.read()
+        return f"<style>{css}</style>"
+    except FileNotFoundError:
+        st.error(f"CSS file not found at {file_path}")
+        return ""
 
 # --- Page Configuration (First st command) ---
 st.set_page_config(
@@ -13,10 +22,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Apply Theme --- 
-theme_name = "Dark Purple" # Or dynamically set this
-css = apply_theme(theme_name)
-st.markdown(css, unsafe_allow_html=True)
+# --- Apply Custom CSS ---
+# Load the CSS from the specified path
+custom_css = load_css("docs/UI/css/main.css")
+if custom_css:
+    st.markdown(custom_css, unsafe_allow_html=True)
 
 # --- Session State Initialization --- 
 if "messages" not in st.session_state:
@@ -50,7 +60,7 @@ with st.sidebar:
             index=current_model_index,
             key="selected_model_selector"
         )
-        
+
         # *** Check if model selection changed ***
         if selected_key_from_dropdown != st.session_state.selected_model_key:
             st.session_state.selected_model_key = selected_key_from_dropdown
@@ -91,7 +101,7 @@ if st.session_state.current_model and st.session_state.history_loaded_for_model 
     print(f"Loading history for: {st.session_state.current_model}") # Debug print
     st.session_state.messages = load_history(st.session_state.current_model)
     st.session_state.history_loaded_for_model = st.session_state.current_model # Mark history as loaded
-    if not st.session_state.messages: 
+    if not st.session_state.messages:
         print("No history found or loaded, starting fresh.") # Debug print
     # st.rerun() # Rerun after loading history to ensure display
 
@@ -100,7 +110,7 @@ if st.session_state.current_model and st.session_state.history_loaded_for_model 
 st.title("💬 Gemini's Garden - Chat")
 
 # Use columns to create a centered chat area
-col1, col2, col3 = st.columns([1, 6, 1]) 
+col1, col2, col3 = st.columns([1, 6, 1])
 
 with col2:
     chat_display_container = st.container() # height styling might need CSS adjustments
@@ -160,4 +170,3 @@ if st.session_state.current_model and st.session_state.messages and st.session_s
                     # st.session_state.messages.append({"role": "assistant", "content": error_message})
                     # save_history(st.session_state.current_model, st.session_state.messages)
                     # st.rerun()
-
