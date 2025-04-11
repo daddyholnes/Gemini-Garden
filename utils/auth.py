@@ -15,7 +15,8 @@ if "auth_secret_key" not in st.session_state:
 
 # Define admin user
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD_HASH = hashlib.sha256("adminpassword123".encode()).hexdigest()  # Default admin password
+# Update the admin password hash to match the one in the database
+ADMIN_PASSWORD_HASH = "scrypt:32768:8:1$U7WYkGUrDHemGcL7$1fb1c07f00249f4a2f912b5434c0528e5873b68b203c7dfb15822a008958088180ed401820b14e60485ed2dd0d9e044bcb40e1f7794135002d6113ff595b8f76"
 
 def get_db_connection():
     """Get a connection to the PostgreSQL database."""
@@ -166,27 +167,23 @@ def create_session(user_id: int, username: str) -> Optional[str]:
     """Create a new session for a user."""
     # Generate a session token
     session_token = secrets.token_hex(32)
-    
-    # For admin user with fallback auth, just return the token
-    if user_id == 0:
-        return session_token
-        
+
     conn = get_db_connection()
     if not conn:
         return None
-        
+
     try:
         cursor = conn.cursor()
-        
+
         # Set expiration to 30 days from now
         expires_at = datetime.datetime.now() + datetime.timedelta(days=30)
-        
-        # Insert the session
+
+        # Insert the session, including the username
         cursor.execute(
-            "INSERT INTO sessions (user_id, session_token, expires_at) VALUES (%s, %s, %s)",
-            (user_id, session_token, expires_at)
+            "INSERT INTO sessions (user_id, username, session_token, expires_at) VALUES (%s, %s, %s, %s)",
+            (user_id, username, session_token, expires_at)
         )
-        
+
         conn.commit()
         return session_token
     except Exception as e:
@@ -197,6 +194,12 @@ def create_session(user_id: int, username: str) -> Optional[str]:
 
 def validate_session(session_token: str) -> Tuple[bool, Optional[Dict]]:
     """Validate a session token."""
+    # Handle bypass scenario
+    bypass_auth_env = os.environ.get("BYPASS_AUTH", "false").lower()
+    if bypass_auth_env == "true":
+        # Return a default valid session for bypass mode
+        return True, {"id": 1, "username": "dev_user", "is_admin": False}
+
     if not session_token:
         return False, None
         
@@ -268,14 +271,26 @@ def check_login() -> None:
     Checks if a user is logged in and handles the login process if not.
     Updates session state with user information.
     """
-    # Initialize auth tables on first run
+    # --- START BYPASS CHECK ---
+    # Check if authentication bypass is enabled FIRST
+    bypass_auth_env = os.environ.get("BYPASS_AUTH", "false").lower()
+    if bypass_auth_env == "true":
+        st.session_state.user = "dev_user"  # Default username for bypass
+        st.session_state.user_id = 1  # Default user ID for bypass (ensure user ID 1 exists)
+        st.session_state.is_admin = False # Default admin status for bypass
+        # Optionally fetch real user data if needed and user ID 1 exists
+        # ... (optional fetch logic as before) ...
+        return # IMPORTANT: Return immediately to skip login/validation
+    # --- END BYPASS CHECK ---
+
+    # Initialize auth tables on first run if not bypassed
     if "auth_initialized" not in st.session_state:
         init_auth_tables()
         st.session_state.auth_initialized = True
-    
-    # Check if session token exists in cookies
+
+    # Check if session token exists in session state (previously cookies)
     session_token = st.session_state.get("session_token")
-    
+
     # Validate session if token exists
     if session_token:
         is_valid, user_data = validate_session(session_token)
@@ -283,18 +298,18 @@ def check_login() -> None:
             st.session_state.user = user_data["username"]
             st.session_state.user_id = user_data["id"]
             st.session_state.is_admin = user_data["is_admin"]
-            return
-    
-    # If we get here, user is not logged in, show login form
+            return # User is validated via token
+
+    # If we get here, user is not logged in via bypass or token, show login form
     col1, col2, col3 = st.columns([1, 2, 1])
-    
+
     with col2:
         st.title("AI Chat Studio")
         st.subheader("Welcome to Dartopia.uk AI")
-        
+
         # Create tabs for login and register
         login_tab, register_tab = st.tabs(["Login", "Register"])
-        
+
         with login_tab:
             st.subheader("Sign In")
             username = st.text_input("Username", key="login_username")
@@ -387,6 +402,17 @@ def logout_user() -> None:
     """
     Logs out the current user by clearing the session state and ending the session.
     """
+    # Handle bypass scenario - simply clear state
+    bypass_auth_env = os.environ.get("BYPASS_AUTH", "false").lower()
+    if bypass_auth_env == "true":
+        st.session_state.user = None
+        st.session_state.user_id = None
+        st.session_state.is_admin = None
+        st.session_state.messages = []
+        st.session_state.current_model = "Gemini" # Or your default
+        st.rerun()
+        return
+
     # End the session in the database
     if "session_token" in st.session_state:
         end_session(st.session_state.session_token)
